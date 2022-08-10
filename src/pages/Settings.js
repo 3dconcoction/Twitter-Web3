@@ -9,14 +9,50 @@ import pfp3 from "../images/pfp3.png";
 import pfp4 from "../images/pfp4.png";
 import pfp5 from "../images/pfp5.png";
 import { defaultImgs } from "../defaultimgs";
-
+import { useMoralis, useMoralisWeb3Api } from "react-moralis";
 
 const Settings = () => {
   
-  const pfps = [pfp1,pfp2,pfp3,pfp4,pfp5];
+  const [pfps, setPfps] = useState([]);
   const [selectedPFP, setSelectedPFP] = useState();
   const inputFile = useRef(null);
   const [selectedFile, setSelectedFile] = useState(defaultImgs[1]);
+  const [theFile, setTheFile] = useState();
+  const [username, setUsername] = useState();
+  const [bio, setBio] = useState();
+  const { Moralis, isAuthenticated, account } = useMoralis();
+  const Web3Api = useMoralisWeb3Api();
+
+  
+  const resolveLink = (url) => {
+    if (!url || !url.includes("ipfs://")) return url;
+    return url.replace("ipfs://", "https://gateway.ipfs.io/ipfs/");
+  };
+
+  
+  /* Using Rinkeby and custom picture of Gundam and King Varian as Profile Pic from 3DC Wallet*/
+
+  useEffect(() => {
+    const fetchNFTs = async () => {
+        const options = {
+            chain: "rinkeby",
+            address: account,
+        };
+
+        const mumbaiNFTs = await Web3Api.account.getNFTs(options);
+        const images = mumbaiNFTs.result.map(
+          (e) => {
+                return resolveLink(JSON.parse(e.metadata)?.image);
+            })
+            .filter((e) => e);
+
+        console.log("images", images);
+        setPfps(images);
+    };
+
+    fetchNFTs();
+
+    },[isAuthenticated, account])
 
   const onBannerClick = () => {
     inputFile.current.click();
@@ -24,8 +60,37 @@ const Settings = () => {
 
   const changeHandler = (event) => {
     const img = event.target.files[0];
+    setTheFile(img);
     setSelectedFile(URL.createObjectURL(img));
   };
+
+  const saveEdits = async () => {
+    const User = Moralis.Object.extend("_User");
+    const query = new Moralis.Query(User);
+    const myDetails = await query.first();
+  
+    if (bio){
+      myDetails.set("bio", bio);
+    }
+
+    if (selectedPFP){
+      myDetails.set("pfp", selectedPFP);
+    }
+
+    if (username){
+      myDetails.set("username", username);
+    }
+
+    if (theFile) {
+      const data = theFile;
+      const file = new Moralis.File(data.name, data);
+      await file.saveIPFS();
+      myDetails.set("banner", file.ipfs());
+    }
+
+    await myDetails.save();
+    window.location.reload();
+  }
 
   return (
     <>
@@ -37,7 +102,7 @@ const Settings = () => {
         name="NameChange"
         width="100%"
         labelBgColor="#141d26"
-       /* onChange={(e)=> setUsername(e.target.value)} */
+       onChange={(e)=> setUsername(e.target.value)}
       />
 
       <Input
@@ -45,7 +110,7 @@ const Settings = () => {
         name="BioChange"
         width="100%"
         labelBgColor="#141d26"
-        /* onChange={(e)=> setBio(e.target.value)} */
+        onChange={(e)=> setBio(e.target.value)}
       />
 
       <div className="pfp">
@@ -86,7 +151,7 @@ const Settings = () => {
             />
           </div>
         </div>
-        <div className="save" /* onClick={() => saveEdits()}*/> 
+        <div className="save" onClick={() => saveEdits()}> 
           Save
         </div>
     </div>
